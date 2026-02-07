@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use winit::{
     application::ApplicationHandler,
@@ -14,6 +15,8 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
     surface: wgpu::Surface<'static>,
     surface_format: wgpu::TextureFormat,
+    start: Instant,
+    num_calls: usize,
 }
 
 impl State {
@@ -43,6 +46,8 @@ impl State {
             size,
             surface,
             surface_format,
+            start: Instant::now(),
+            num_calls: 0,
         };
 
         // Configure surface for the first time
@@ -65,7 +70,7 @@ impl State {
             width: self.size.width,
             height: self.size.height,
             desired_maximum_frame_latency: 2,
-            present_mode: wgpu::PresentMode::AutoVsync,
+            present_mode: wgpu::PresentMode::Fifo,
         };
         self.surface.configure(&self.device, &surface_config);
     }
@@ -119,8 +124,18 @@ impl State {
 
         // Submit the command in the queue to execute
         self.queue.submit([encoder.finish()]);
-        self.window.pre_present_notify();
         surface_texture.present();
+
+        {
+            self.num_calls += 1;
+            let now = Instant::now();
+            if now.duration_since(self.start) >= Duration::from_secs(1) {
+                eprintln!("FPS: {}", self.num_calls);
+                self.start = now;
+                self.num_calls = 0;
+            }
+            std::thread::sleep(Duration::from_millis(1));
+        }
     }
 }
 
